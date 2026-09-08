@@ -15,10 +15,10 @@ async function sendOTP() {
         return;
     }
 
-    const validEmailPattern = /(?:@gmail\.com|@kgisliim\.ac\.in)$/i;
+    const validEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
     if (!validEmailPattern.test(email)) {
-        showMessage("Please enter a valid Gmail or KGISLIIM email address.", "error");
+        showMessage("Please enter a valid email address.", "error");
         return;
     }
 

@@ -62,7 +62,7 @@ function generateOTP() {
 
 app.post("/send-otp", async (req, res) => {
 
-    const { email } = req.body;
+    const email = String(req.body.email || "").trim().toLowerCase();
 
     console.log("📧 OTP request received for:", email);
 
@@ -77,12 +77,14 @@ app.post("/send-otp", async (req, res) => {
     }
 
 
-    // Gmail validation
-    if (!email.toLowerCase().endsWith("@gmail.com")) {
+    // Email validation
+    const validEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
+    if (!validEmailPattern.test(email)) {
 
         return res.status(400).json({
             success: false,
-            message: "Please enter a valid Gmail address"
+            message: "Please enter a valid email address"
         });
 
     }
@@ -199,7 +201,8 @@ app.post("/send-otp", async (req, res) => {
 
 app.post("/verify-otp", (req, res) => {
 
-    const { email, otp } = req.body;
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const { otp } = req.body;
 
     console.log("🔐 OTP verification request:", email);
 
