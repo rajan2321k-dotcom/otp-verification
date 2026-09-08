@@ -17,10 +17,9 @@
       <h1>Email Verification</h1>
 
       <p class="subtitle">
-        Enter your Gmail address to receive a one-time verification code.
+        Enter your Gmail address to receive an OTP.
       </p>
 
-      <!-- Email Section -->
       <div id="emailSection">
 
         <label for="email">Email address</label>
@@ -30,7 +29,6 @@
             type="email"
             id="email"
             placeholder="example@gmail.com"
-            autocomplete="email"
           >
 
           <button type="button" id="sendBtn">
@@ -38,12 +36,10 @@
           </button>
         </div>
 
-        <!-- IMPORTANT -->
         <p id="emailMessage" class="message"></p>
 
       </div>
 
-      <!-- OTP Section -->
       <div id="otpSection" class="hidden">
 
         <label for="otp">Enter OTP</label>
@@ -54,23 +50,12 @@
           placeholder="Enter 6-digit OTP"
           maxlength="6"
           inputmode="numeric"
-          autocomplete="one-time-code"
         >
-
-        <div class="timer">
-          OTP expires in:
-          <strong id="timer">05:00</strong>
-        </div>
 
         <button type="button" id="verifyBtn">
           Verify OTP
         </button>
 
-        <button type="button" id="resendBtn" class="secondary" disabled>
-          Resend OTP
-        </button>
-
-        <!-- IMPORTANT -->
         <p id="otpMessage" class="message"></p>
 
       </div>
