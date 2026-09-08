@@ -1,257 +1,299 @@
-let userEmail = "";
-let timerInterval;
-let timeLeft = 300;
+document.addEventListener("DOMContentLoaded", () => {
 
+  const emailInput = document.getElementById("email");
+  const otpInput = document.getElementById("otp");
 
-// Send OTP
-async function sendOTP() {
+  const sendBtn = document.getElementById("sendBtn");
+  const verifyBtn = document.getElementById("verifyBtn");
+  const resendBtn = document.getElementById("resendBtn");
 
-    const email = document.getElementById("email").value.trim();
-    const message = document.getElementById("message");
-    const button = document.getElementById("sendBtn");
+  const emailSection = document.getElementById("emailSection");
+  const otpSection = document.getElementById("otpSection");
+
+  const emailMessage = document.getElementById("emailMessage");
+  const otpMessage = document.getElementById("otpMessage");
+
+  const timerElement = document.getElementById("timer");
+
+  let countdown = null;
+  let remainingSeconds = 300;
+
+  // Check HTML elements
+  if (
+    !emailInput ||
+    !otpInput ||
+    !sendBtn ||
+    !verifyBtn ||
+    !resendBtn ||
+    !emailSection ||
+    !otpSection ||
+    !emailMessage ||
+    !otpMessage ||
+    !timerElement
+  ) {
+    console.error("❌ Required HTML elements are missing.");
+    return;
+  }
+
+  // Send OTP
+  sendBtn.addEventListener("click", () => {
+    sendOTP(false);
+  });
+
+  // Resend OTP
+  resendBtn.addEventListener("click", () => {
+    sendOTP(true);
+  });
+
+  // Verify OTP
+  verifyBtn.addEventListener("click", verifyOTP);
+
+  // Send OTP
+  async function sendOTP(isResend = false) {
+
+    const email = emailInput.value.trim().toLowerCase();
+
+    clearMessages();
 
     if (!email) {
-        showMessage("Please enter your email address.", "error");
-        return;
+      showMessage(
+        isResend ? otpMessage : emailMessage,
+        "Please enter your Gmail address.",
+        "error"
+      );
+      return;
     }
 
-    const validEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
-
-    if (!validEmailPattern.test(email)) {
-        showMessage("Please enter a valid email address.", "error");
-        return;
+    if (!/^[^\s@]+@gmail\.com$/i.test(email)) {
+      showMessage(
+        isResend ? otpMessage : emailMessage,
+        "Please enter a valid Gmail address.",
+        "error"
+      );
+      return;
     }
+
+    const button = isResend ? resendBtn : sendBtn;
 
     button.disabled = true;
-    button.innerText = "Sending...";
+    button.textContent = "Sending...";
 
     try {
 
-        const response = await fetch("/send-otp", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ email })
-        });
+      console.log("📤 Sending OTP request...");
 
-        const data = await response.json();
+      const response = await fetch("/send-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: email
+        })
+      });
 
-        if (data.success) {
+      console.log("📥 Response status:", response.status);
 
-            userEmail = email;
+      const data = await response.json();
 
-            document.getElementById("emailSection")
-                .classList.add("hidden");
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || "Failed to send OTP"
+        );
+      }
 
-            document.getElementById("otpSection")
-                .classList.remove("hidden");
+      console.log("✅ OTP sent successfully");
 
-            document.getElementById("emailText")
-                .innerText = email;
+      showMessage(
+        isResend ? otpMessage : emailMessage,
+        "OTP sent successfully! Check your Gmail.",
+        "success"
+      );
 
-            showMessage("OTP sent successfully 📧", "success");
+      if (!isResend) {
+        emailSection.classList.add("hidden");
+        otpSection.classList.remove("hidden");
+      }
 
-            startTimer();
+      otpInput.value = "";
+      otpInput.focus();
 
-        } else {
-            showMessage(data.message, "error");
-        }
+      startTimer();
 
     } catch (error) {
 
-        showMessage("Something went wrong.", "error");
+      console.error("❌ Send OTP error:", error);
+
+      showMessage(
+        isResend ? otpMessage : emailMessage,
+        error.message || "Failed to send OTP. Please try again.",
+        "error"
+      );
 
     } finally {
 
-        button.disabled = false;
-        button.innerText = "Send OTP";
+      if (isResend) {
+        resendBtn.textContent = "Resend OTP";
+      } else {
+        sendBtn.textContent = "Send OTP";
+      }
+
+      button.disabled = false;
+
+      // Resend stays disabled until timer ends
+      if (isResend && remainingSeconds > 0) {
+        resendBtn.disabled = true;
+      }
     }
-}
+  }
 
+  // Verify OTP
+  async function verifyOTP() {
 
-// Verify OTP
-async function verifyOTP() {
+    const email = emailInput.value.trim().toLowerCase();
+    const otp = otpInput.value.trim();
 
-    const otp = document.getElementById("otp").value.trim();
-    const button = document.getElementById("verifyBtn");
+    clearMessage(otpMessage);
 
-    if (!otp || otp.length !== 6) {
-
-        showMessage("Enter the 6-digit OTP.", "error");
-
-        return;
+    if (!otp) {
+      showMessage(
+        otpMessage,
+        "Please enter the OTP.",
+        "error"
+      );
+      return;
     }
 
-    button.disabled = true;
-    button.innerText = "Verifying...";
+    if (!/^\d{6}$/.test(otp)) {
+      showMessage(
+        otpMessage,
+        "OTP must contain exactly 6 digits.",
+        "error"
+      );
+      return;
+    }
+
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = "Verifying...";
 
     try {
 
-        const response = await fetch("/verify-otp", {
+      const response = await fetch("/verify-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: email,
+          otp: otp
+        })
+      });
 
-            method: "POST",
+      const data = await response.json();
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || "Verification failed"
+        );
+      }
 
-            body: JSON.stringify({
-                email: userEmail,
-                otp: otp
-            })
+      showMessage(
+        otpMessage,
+        "✅ Email verified successfully!",
+        "success"
+      );
 
-        });
+      verifyBtn.textContent = "Verified ✓";
+      verifyBtn.disabled = true;
+      resendBtn.disabled = true;
 
-        const data = await response.json();
-
-        if (data.success) {
-
-            clearInterval(timerInterval);
-
-            showMessage(
-                "Email verified successfully! ✅ Redirecting...",
-                "success"
-            );
-
-            document.getElementById("otp").disabled = true;
-            button.disabled = true;
-
-            document.getElementById("resendBtn").disabled = true;
-
-            setTimeout(() => {
-                window.location.href = "https://www.kgisliim.ac.in/";
-            }, 1200);
-
-        } else {
-
-            showMessage(data.message, "error");
-
-            document.getElementById("otp").value = "";
-
-        }
+      clearInterval(countdown);
 
     } catch (error) {
 
-        showMessage("Verification failed.", "error");
+      console.error("❌ Verify error:", error);
 
-    } finally {
+      showMessage(
+        otpMessage,
+        error.message || "Invalid OTP",
+        "error"
+      );
 
-        if (!document.getElementById("otp").disabled) {
-            button.disabled = false;
-            button.innerText = "Verify OTP";
-        }
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = "Verify OTP";
     }
-}
+  }
 
+  // Timer
+  function startTimer() {
 
-// Resend OTP
-async function resendOTP() {
+    clearInterval(countdown);
 
-    const button = document.getElementById("resendBtn");
+    remainingSeconds = 300;
 
-    button.disabled = true;
-    button.innerText = "Sending...";
-
-    try {
-
-        const response = await fetch("/send-otp", {
-
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json"
-            },
-
-            body: JSON.stringify({
-                email: userEmail
-            })
-
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-
-            document.getElementById("otp").value = "";
-
-            showMessage(
-                "New OTP sent successfully 📧",
-                "success"
-            );
-
-            startTimer();
-
-        } else {
-
-            showMessage(data.message, "error");
-
-        }
-
-    } catch (error) {
-
-        showMessage("Failed to resend OTP.", "error");
-
-    }
-}
-
-
-// 5 minute countdown
-function startTimer() {
-
-    clearInterval(timerInterval);
-
-    timeLeft = 300;
+    resendBtn.disabled = true;
 
     updateTimer();
 
-    const resendBtn = document.getElementById("resendBtn");
+    countdown = setInterval(() => {
 
-    resendBtn.disabled = true;
-    resendBtn.innerText = "Resend OTP";
+      remainingSeconds--;
 
-    timerInterval = setInterval(() => {
+      updateTimer();
 
-        timeLeft--;
+      if (remainingSeconds <= 0) {
 
-        updateTimer();
+        clearInterval(countdown);
 
-        if (timeLeft <= 0) {
+        timerElement.textContent = "00:00";
 
-            clearInterval(timerInterval);
+        resendBtn.disabled = false;
 
-            document.getElementById("timer").innerText = "00:00";
-
-            resendBtn.disabled = false;
-            resendBtn.innerText = "Resend OTP";
-
-            showMessage(
-                "OTP expired. You can resend OTP.",
-                "error"
-            );
-        }
+        showMessage(
+          otpMessage,
+          "OTP expired. You can request a new OTP.",
+          "error"
+        );
+      }
 
     }, 1000);
-}
+  }
 
+  // Update timer
+  function updateTimer() {
 
-// Update timer display
-function updateTimer() {
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
 
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
+    timerElement.textContent =
+      String(minutes).padStart(2, "0") +
+      ":" +
+      String(seconds).padStart(2, "0");
+  }
 
-    document.getElementById("timer").innerText =
-        `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
+  // Show message
+  function showMessage(element, message, type) {
 
+    if (!element) return;
 
-// Message
-function showMessage(text, type) {
+    element.textContent = message;
+    element.className = `message ${type}`;
+  }
 
-    const message = document.getElementById("message");
+  // Clear one message
+  function clearMessage(element) {
 
-    message.innerText = text;
+    if (!element) return;
 
-    message.className = type;
-}
+    element.textContent = "";
+    element.className = "message";
+  }
+
+  // Clear all messages
+  function clearMessages() {
+
+    clearMessage(emailMessage);
+    clearMessage(otpMessage);
+  }
+
+});
