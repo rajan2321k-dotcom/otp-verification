@@ -11,7 +11,7 @@ async function sendOTP() {
     const button = document.getElementById("sendBtn");
 
     if (!email) {
-        showMessage("Please enter your Gmail address.", "error");
+        showMessage("Please enter your email address.", "error");
         return;
     }
 
