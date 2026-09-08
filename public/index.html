@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>OTP Verification</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+   
+    <div class="card">
+
+        <div class="icon-wrap">
+            <div class="icon">✉️</div>
+        </div>
+
+        <p class="eyebrow">Identity verification</p>
+        <h1>Email Verification</h1>
+
+        <p class="subtitle">
+            Enter your Gmail address to receive a one-time verification code.
+        </p>
+
+        <!-- Email Section -->
+
+        <div id="emailSection" class="form-block">
+
+            <label for="email" class="field-label">Email address</label>
+            <input
+                type="email"
+                id="email"
+                placeholder="name@gmail.com"
+            >
+
+            <button id="sendBtn" onclick="sendOTP()">
+                Send OTP
+            </button>
+
+        </div>
+
+
+        <!-- OTP Section -->
+
+        <div id="otpSection" class="form-block hidden">
+
+            <p class="sentText">
+                OTP sent to <strong id="emailText"></strong>
+            </p>
+
+            <label for="otp" class="field-label">Verification code</label>
+            <input
+                type="text"
+                id="otp"
+                placeholder="Enter 6-digit OTP"
+                maxlength="6"
+                inputmode="numeric"
+            >
+
+            <button id="verifyBtn" onclick="verifyOTP()">
+                Verify OTP
+            </button>
+
+            <div class="timer">
+                OTP expires in <span id="timer">05:00</span>
+            </div>
+
+            <button
+                id="resendBtn"
+                class="resend"
+                onclick="resendOTP()"
+                disabled
+            >
+                Resend OTP
+            </button>
+
+        </div>
+
+
+        <p id="message" aria-live="polite"></p>
+
+    </div>
+
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
