@@ -18,6 +18,14 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS
     }
 });
+transporter.verify((error, success) => {
+    if (error) {
+        console.error("SMTP ERROR:", error.message);
+    } else {
+        console.log("SMTP SERVER READY ✅");
+    }
+});
+
 
 // Send / Resend OTP
 app.post("/send-otp", async (req, res) => {
