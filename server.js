@@ -4,11 +4,18 @@ const dotenv = require("dotenv");
 const path = require("path");
 
 dotenv.config();
+console.log("EMAIL_USER:", process.env.EMAIL_USER);
+console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS);
+console.log("EMAIL_PASS length:", process.env.EMAIL_PASS?.length);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const otpStore = {};
+
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  console.error("⚠️ Missing EMAIL_USER or EMAIL_PASS in .env. Add your Gmail credentials first.");
+}
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -19,9 +26,19 @@ const transporter = nodemailer.createTransport({
   port: 587,
   secure: false,
   requireTLS: true,
+  family: 4,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  }
+});
+
+transporter.verify((error) => {
+  if (error) {
+    console.error("⚠️ Gmail SMTP verification failed. Check EMAIL_USER and EMAIL_PASS in .env.");
+    console.error("   For Gmail, use a 16-character App Password instead of your normal account password.");
+  } else {
+    console.log("✅ Gmail SMTP connection verified.");
   }
 });
 
@@ -67,9 +84,15 @@ app.post("/send-otp", async (req, res) => {
 
     console.error("❌ EMAIL SEND ERROR:", error.message);
 
+    let message = "Failed to send OTP. Please try again.";
+
+    if (error.code === "EAUTH" || error.responseCode === 535) {
+      message = "Gmail authentication failed. Update EMAIL_USER and EMAIL_PASS in .env with a valid Gmail App Password.";
+    }
+
     res.status(500).json({
       success: false,
-      message: "Failed to send OTP. Please try again."
+      message
     });
   }
 });
