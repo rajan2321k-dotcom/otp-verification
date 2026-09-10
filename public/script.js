@@ -1,188 +1,174 @@
-document.addEventListener("DOMContentLoaded", () => {
+const express = require("express");
+const dotenv = require("dotenv");
+const path = require("path");
+const brevo = require("@getbrevo/brevo");
 
-  console.log("✅ script.js loaded");
+dotenv.config();
 
-  const email = document.getElementById("email");
-  const otp = document.getElementById("otp");
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  const sendBtn = document.getElementById("sendBtn");
-  const verifyBtn = document.getElementById("verifyBtn");
+const otpStore = {};
 
-  const emailSection = document.getElementById("emailSection");
-  const otpSection = document.getElementById("otpSection");
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-  const emailMessage = document.getElementById("emailMessage");
-  const otpMessage = document.getElementById("otpMessage");
+const apiInstance = new brevo.TransactionalEmailsApi();
 
-  // Make sure all elements exist
-  if (
-    !email ||
-    !otp ||
-    !sendBtn ||
-    !verifyBtn ||
-    !emailSection ||
-    !otpSection ||
-    !emailMessage ||
-    !otpMessage
-  ) {
-    console.error("❌ HTML element missing");
-    return;
+apiInstance.setApiKey(
+  brevo.TransactionalEmailsApiApiKeys.apiKey,
+  process.env.BREVO_API_KEY
+);
+
+function generateOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// SEND OTP
+app.post("/send-otp", async (req, res) => {
+  try {
+    const email = req.body.email?.trim().toLowerCase();
+
+    console.log("📧 OTP request:", email);
+
+    const emailPattern =
+      /^[a-zA-Z0-9._%+-]+@(gmail\.com|[a-zA-Z0-9.-]+\.ac\.in)$/;
+
+    if (!email || !emailPattern.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid Gmail or .ac.in email address"
+      });
+    }
+
+    const otp = generateOTP();
+
+    otpStore[email] = {
+      otp: otp,
+      attempts: 0,
+      expires: Date.now() + 5 * 60 * 1000
+    };
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+
+    sendSmtpEmail.sender = {
+      name: "OTP Verification",
+      email: process.env.BREVO_SENDER_EMAIL
+    };
+
+    sendSmtpEmail.to = [
+      {
+        email: email
+      }
+    ];
+
+    sendSmtpEmail.subject = "Your OTP Verification Code";
+
+    sendSmtpEmail.htmlContent = `
+      <div style="font-family:Arial;padding:20px">
+        <h2>Email Verification</h2>
+        <p>Your OTP is:</p>
+
+        <h1 style="
+          letter-spacing:8px;
+          background:#f3f3f3;
+          padding:15px;
+          text-align:center;
+        ">
+          ${otp}
+        </h1>
+
+        <p>This OTP is valid for 5 minutes.</p>
+        <p>Maximum attempts: 3.</p>
+      </div>
+    `;
+
+    await apiInstance.sendTransacEmail(sendSmtpEmail);
+
+    console.log("✅ OTP sent:", email);
+
+    res.json({
+      success: true,
+      message: "OTP sent successfully"
+    });
+
+  } catch (error) {
+
+    console.error("❌ BREVO ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to send OTP"
+    });
+  }
+});
+
+// VERIFY OTP
+app.post("/verify-otp", (req, res) => {
+
+  const email = req.body.email?.trim().toLowerCase();
+  const enteredOTP = req.body.otp?.trim();
+
+  const record = otpStore[email];
+
+  if (!record) {
+    return res.status(400).json({
+      success: false,
+      message: "OTP not found"
+    });
   }
 
-  // =========================
-  // SEND OTP
-  // =========================
+  if (Date.now() > record.expires) {
+    delete otpStore[email];
 
-  sendBtn.addEventListener("click", async () => {
+    return res.status(400).json({
+      success: false,
+      message: "OTP expired"
+    });
+  }
 
-    console.log("🟢 Send OTP button clicked");
+  if (record.attempts >= 3) {
+    delete otpStore[email];
 
-    const emailValue = email.value.trim().toLowerCase();
+    return res.status(400).json({
+      success: false,
+      message: "Maximum 3 attempts exceeded"
+    });
+  }
 
-    emailMessage.textContent = "";
+  if (enteredOTP !== record.otp) {
 
-    if (!emailValue) {
-      emailMessage.textContent = "Please enter your Gmail address.";
-      emailMessage.className = "message error";
-      return;
-    }
-const emailPattern =
-  /^[a-zA-Z0-9._%+-]+@(gmail\.com|[a-zA-Z0-9.-]+\.ac\.in)$/;
+    record.attempts++;
 
-if (!emailPattern.test(emailValue)) {
-  emailMessage.textContent =
-    "Please enter a valid Gmail or .ac.in email address.";
-  emailMessage.className = "message error";
-  return;
-}
-  
-    sendBtn.disabled = true;
-    sendBtn.textContent = "Sending...";
+    if (record.attempts >= 3) {
+      delete otpStore[email];
 
-    try {
-
-      console.log("📤 Sending request to /send-otp");
-
-      const response = await fetch("/send-otp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: emailValue
-        })
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 3 attempts exceeded"
       });
-
-      console.log("📥 Server response:", response.status);
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to send OTP");
-      }
-
-      console.log("✅ OTP sent");
-
-      emailMessage.textContent =
-        "OTP sent successfully. Check your Gmail.";
-
-      emailMessage.className = "message success";
-
-      emailSection.classList.add("hidden");
-      otpSection.classList.remove("hidden");
-
-      otp.focus();
-
-    } catch (error) {
-
-      console.error("❌ Send OTP error:", error);
-
-      emailMessage.textContent =
-        error.message || "Failed to send OTP.";
-
-      emailMessage.className = "message error";
-
-    } finally {
-
-      sendBtn.disabled = false;
-      sendBtn.textContent = "Send OTP";
     }
 
+    return res.status(400).json({
+      success: false,
+      message: `Invalid OTP. ${3 - record.attempts} attempt(s) remaining.`
+    });
+  }
+
+  delete otpStore[email];
+
+  console.log("✅ OTP verified:", email);
+
+  res.json({
+    success: true,
+    message: "OTP verified successfully"
   });
+});
 
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
-  // =========================
-  // VERIFY OTP
-  // =========================
-
-  verifyBtn.addEventListener("click", async () => {
-
-    console.log("🟢 Verify button clicked");
-
-    const emailValue = email.value.trim().toLowerCase();
-    const otpValue = otp.value.trim();
-
-    otpMessage.textContent = "";
-
-    if (!otpValue) {
-      otpMessage.textContent = "Please enter the OTP.";
-      otpMessage.className = "message error";
-      return;
-    }
-
-    if (!/^\d{6}$/.test(otpValue)) {
-      otpMessage.textContent = "OTP must contain 6 digits.";
-      otpMessage.className = "message error";
-      return;
-    }
-
-    verifyBtn.disabled = true;
-    verifyBtn.textContent = "Verifying...";
-
-    try {
-
-      const response = await fetch("/verify-otp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: emailValue,
-          otp: otpValue
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Verification failed");
-      }
-
-      otpMessage.textContent =
-        "✅ OTP verified successfully!";
-
-      otpMessage.className = "message success";
-
-      verifyBtn.textContent = "Verified ✓";
-
-      // Redirect to Netflix
-      setTimeout(() => {
-        window.location.href = "https://www.netflix.com/";
-      }, 1500);
-
-    } catch (error) {
-
-      console.error("❌ Verify error:", error);
-
-      otpMessage.textContent =
-        error.message || "Verification failed.";
-
-      otpMessage.className = "message error";
-
-      verifyBtn.disabled = false;
-      verifyBtn.textContent = "Verify OTP";
-    }
-
-  });
-
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
