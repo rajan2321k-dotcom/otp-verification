@@ -12,32 +12,34 @@
   <div class="container">
     <div class="card">
 
-      <h1>Welcome back</h1>
+      <div class="icon">✉️</div>
+
+      <h1>Email Verification</h1>
 
       <p class="subtitle">
-        Sign in with your Gmail address and verify your identity with a one-time password.
+        Enter your Gmail address to receive an OTP.
       </p>
 
+      <!-- EMAIL -->
       <div id="emailSection">
 
         <label for="email">Email address</label>
 
-        <div class="input-group">
-          <input
-            type="email"
-            id="email"
-            placeholder="example@gmail.com"
-          >
+        <input
+          type="email"
+          id="email"
+          placeholder="example@gmail.com"
+        >
 
-          <button type="button" id="sendBtn">
-            Send OTP
-          </button>
-        </div>
+        <button type="button" id="sendBtn">
+          Send OTP
+        </button>
 
         <p id="emailMessage" class="message"></p>
 
       </div>
 
+      <!-- OTP -->
       <div id="otpSection" class="hidden">
 
         <label for="otp">Enter OTP</label>
@@ -45,8 +47,8 @@
         <input
           type="text"
           id="otp"
-          placeholder="Enter 6-digit OTP"
           maxlength="6"
+          placeholder="Enter 6-digit OTP"
           inputmode="numeric"
         >
 
@@ -61,6 +63,7 @@
     </div>
   </div>
 
+  <!-- IMPORTANT -->
   <script src="/script.js"></script>
 
 </body>

@@ -4,21 +4,13 @@ const dotenv = require("dotenv");
 const path = require("path");
 
 dotenv.config();
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS);
-console.log("EMAIL_PASS length:", process.env.EMAIL_PASS?.length);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const otpStore = {};
 
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-  console.error("⚠️ Missing EMAIL_USER or EMAIL_PASS in .env. Add your Gmail credentials first.");
-}
-
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
 const transporter = nodemailer.createTransport({
@@ -35,45 +27,53 @@ const transporter = nodemailer.createTransport({
 
 transporter.verify((error) => {
   if (error) {
-    console.error("⚠️ Gmail SMTP verification failed. Check EMAIL_USER and EMAIL_PASS in .env.");
-    console.error("   For Gmail, use a 16-character App Password instead of your normal account password.");
+    console.error("❌ SMTP ERROR:", error.message);
   } else {
-    console.log("✅ Gmail SMTP connection verified.");
+    console.log("✅ Gmail SMTP READY");
   }
 });
 
+function generateOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 // Send OTP
 app.post("/send-otp", async (req, res) => {
-
   try {
-
     const email = req.body.email?.trim().toLowerCase();
 
-    console.log("📧 OTP request received:", email);
+    console.log("📧 OTP request:", email);
 
-    if (!email) {
+    if (!email || !email.endsWith("@gmail.com")) {
       return res.status(400).json({
         success: false,
-        message: "Email is required"
+        message: "Enter a valid Gmail address"
       });
     }
 
-    const otp =
-      Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = generateOTP();
 
     otpStore[email] = {
       otp,
-      attempts: 0
+      attempts: 0,
+      expires: Date.now() + 5 * 60 * 1000
     };
 
     await transporter.sendMail({
       from: `"OTP Verification" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Your OTP Code",
-      text: `Your OTP is ${otp}`
+      subject: "Your OTP Verification Code",
+      html: `
+        <div style="font-family:Arial;padding:20px">
+          <h2>Email Verification</h2>
+          <p>Your OTP is:</p>
+          <h1 style="letter-spacing:8px">${otp}</h1>
+          <p>This OTP is valid for 5 minutes.</p>
+        </div>
+      `
     });
 
-    console.log("✅ OTP sent successfully");
+    console.log("✅ OTP sent to:", email);
 
     res.json({
       success: true,
@@ -81,59 +81,56 @@ app.post("/send-otp", async (req, res) => {
     });
 
   } catch (error) {
-
-    console.error("❌ EMAIL SEND ERROR:", error.message);
-
-    let message = "Failed to send OTP. Please try again.";
-
-    if (error.code === "EAUTH" || error.responseCode === 535) {
-      message = "Gmail authentication failed. Update EMAIL_USER and EMAIL_PASS in .env with a valid Gmail App Password.";
-    }
+    console.error("❌ EMAIL ERROR:", error.message);
 
     res.status(500).json({
       success: false,
-      message
+      message: "Failed to send OTP"
     });
   }
 });
 
 // Verify OTP
 app.post("/verify-otp", (req, res) => {
-
   const email = req.body.email?.trim().toLowerCase();
   const enteredOTP = req.body.otp?.trim();
 
-  const data = otpStore[email];
+  const record = otpStore[email];
 
-  if (!data) {
+  if (!record) {
     return res.status(400).json({
       success: false,
       message: "OTP not found"
     });
   }
 
-  // Maximum 3 wrong attempts
-  if (data.attempts >= 3) {
+  if (Date.now() > record.expires) {
     delete otpStore[email];
 
     return res.status(400).json({
       success: false,
-      message: "Maximum 3 attempts exceeded. Verification blocked."
+      message: "OTP expired"
     });
   }
 
-  if (enteredOTP !== data.otp) {
+  if (record.attempts >= 3) {
+    delete otpStore[email];
 
-    data.attempts++;
+    return res.status(400).json({
+      success: false,
+      message: "Maximum 3 attempts exceeded"
+    });
+  }
 
-    const remaining = 3 - data.attempts;
+  if (enteredOTP !== record.otp) {
+    record.attempts++;
 
     return res.status(400).json({
       success: false,
       message:
-        remaining > 0
-          ? `Invalid OTP. ${remaining} attempt(s) remaining.`
-          : "Maximum 3 attempts exceeded."
+        record.attempts >= 3
+          ? "Maximum 3 attempts exceeded"
+          : `Invalid OTP. ${3 - record.attempts} attempt(s) remaining.`
     });
   }
 
@@ -143,7 +140,7 @@ app.post("/verify-otp", (req, res) => {
 
   res.json({
     success: true,
-    message: "Email verified successfully"
+    message: "OTP verified successfully"
   });
 });
 

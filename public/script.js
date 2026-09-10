@@ -1,7 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
 
-  const emailInput = document.getElementById("email");
-  const otpInput = document.getElementById("otp");
+  console.log("✅ script.js loaded");
+
+  const email = document.getElementById("email");
+  const otp = document.getElementById("otp");
 
   const sendBtn = document.getElementById("sendBtn");
   const verifyBtn = document.getElementById("verifyBtn");
@@ -12,36 +14,66 @@ document.addEventListener("DOMContentLoaded", () => {
   const emailMessage = document.getElementById("emailMessage");
   const otpMessage = document.getElementById("otpMessage");
 
-  // Send OTP
+  // Make sure all elements exist
+  if (
+    !email ||
+    !otp ||
+    !sendBtn ||
+    !verifyBtn ||
+    !emailSection ||
+    !otpSection ||
+    !emailMessage ||
+    !otpMessage
+  ) {
+    console.error("❌ HTML element missing");
+    return;
+  }
+
+  // =========================
+  // SEND OTP
+  // =========================
+
   sendBtn.addEventListener("click", async () => {
 
-    const email = emailInput.value.trim().toLowerCase();
+    console.log("🟢 Send OTP button clicked");
+
+    const emailValue = email.value.trim().toLowerCase();
 
     emailMessage.textContent = "";
-    otpMessage.textContent = "";
 
-    if (!email) {
-      showMessage(emailMessage, "Please enter your Gmail address.", "error");
+    if (!emailValue) {
+      emailMessage.textContent = "Please enter your Gmail address.";
+      emailMessage.className = "message error";
       return;
     }
+const emailPattern =
+  /^[a-zA-Z0-9._%+-]+@(gmail\.com|[a-zA-Z0-9.-]+\.ac\.in)$/;
 
-    if (!/^[^\s@]+@gmail\.com$/i.test(email)) {
-      showMessage(emailMessage, "Please enter a valid Gmail address.", "error");
-      return;
-    }
-
+if (!emailPattern.test(emailValue)) {
+  emailMessage.textContent =
+    "Please enter a valid Gmail or .ac.in email address.";
+  emailMessage.className = "message error";
+  return;
+}
+  
     sendBtn.disabled = true;
     sendBtn.textContent = "Sending...";
 
     try {
+
+      console.log("📤 Sending request to /send-otp");
 
       const response = await fetch("/send-otp", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({
+          email: emailValue
+        })
       });
+
+      console.log("📥 Server response:", response.status);
 
       const data = await response.json();
 
@@ -49,52 +81,58 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(data.message || "Failed to send OTP");
       }
 
-      showMessage(
-        emailMessage,
-        "OTP sent successfully. Check your Gmail.",
-        "success"
-      );
+      console.log("✅ OTP sent");
+
+      emailMessage.textContent =
+        "OTP sent successfully. Check your Gmail.";
+
+      emailMessage.className = "message success";
 
       emailSection.classList.add("hidden");
       otpSection.classList.remove("hidden");
 
-      otpInput.focus();
+      otp.focus();
 
     } catch (error) {
 
-      console.error("Send OTP error:", error);
+      console.error("❌ Send OTP error:", error);
 
-      showMessage(
-        emailMessage,
-        error.message || "Failed to send OTP.",
-        "error"
-      );
+      emailMessage.textContent =
+        error.message || "Failed to send OTP.";
+
+      emailMessage.className = "message error";
 
     } finally {
+
       sendBtn.disabled = false;
       sendBtn.textContent = "Send OTP";
     }
+
   });
 
-  // Verify OTP
+
+  // =========================
+  // VERIFY OTP
+  // =========================
+
   verifyBtn.addEventListener("click", async () => {
 
-    const email = emailInput.value.trim().toLowerCase();
-    const otp = otpInput.value.trim();
+    console.log("🟢 Verify button clicked");
+
+    const emailValue = email.value.trim().toLowerCase();
+    const otpValue = otp.value.trim();
 
     otpMessage.textContent = "";
 
-    if (!otp) {
-      showMessage(otpMessage, "Please enter the OTP.", "error");
+    if (!otpValue) {
+      otpMessage.textContent = "Please enter the OTP.";
+      otpMessage.className = "message error";
       return;
     }
 
-    if (!/^\d{6}$/.test(otp)) {
-      showMessage(
-        otpMessage,
-        "OTP must be exactly 6 digits.",
-        "error"
-      );
+    if (!/^\d{6}$/.test(otpValue)) {
+      otpMessage.textContent = "OTP must contain 6 digits.";
+      otpMessage.className = "message error";
       return;
     }
 
@@ -109,43 +147,42 @@ document.addEventListener("DOMContentLoaded", () => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email,
-          otp
+          email: emailValue,
+          otp: otpValue
         })
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.message || "Invalid OTP");
+        throw new Error(data.message || "Verification failed");
       }
 
-      showMessage(
-        otpMessage,
-        "✅ Email verified successfully!",
-        "success"
-      );
+      otpMessage.textContent =
+        "✅ OTP verified successfully!";
+
+      otpMessage.className = "message success";
 
       verifyBtn.textContent = "Verified ✓";
 
+      // Redirect to Netflix
+      setTimeout(() => {
+        window.location.href = "https://www.netflix.com/";
+      }, 1500);
+
     } catch (error) {
 
-      console.error("Verify OTP error:", error);
+      console.error("❌ Verify error:", error);
 
-      showMessage(
-        otpMessage,
-        error.message || "Verification failed.",
-        "error"
-      );
+      otpMessage.textContent =
+        error.message || "Verification failed.";
+
+      otpMessage.className = "message error";
 
       verifyBtn.disabled = false;
       verifyBtn.textContent = "Verify OTP";
     }
-  });
 
-  function showMessage(element, text, type) {
-    element.textContent = text;
-    element.className = `message ${type}`;
-  }
+  });
 
 });

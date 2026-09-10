@@ -1,8 +1,6 @@
 {
   "name": "otp-verification",
   "version": "1.0.0",
-  "description": "Gmail OTP Verification System",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
