@@ -1,7 +1,7 @@
 const express = require("express");
-const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
 const path = require("path");
+const brevo = require("@getbrevo/brevo");
 
 dotenv.config();
 
