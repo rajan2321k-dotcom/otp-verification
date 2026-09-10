@@ -1,215 +1,237 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const path = require("path");
-const brevo = require("@getbrevo/brevo");
+const { BrevoClient } = require("@getbrevo/brevo");
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Temporary OTP storage
 const otpStore = {};
 
+// Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
+// ===============================
+// BREVO CLIENT
+// ===============================
 
-// =============================
-// BREVO API SETUP
-// =============================
+const brevo = new BrevoClient({
+  apiKey: process.env.BREVO_API_KEY
+});
 
-const apiInstance = new brevo.TransactionalEmailsApi();
-
-apiInstance.setApiKey(
-  brevo.TransactionalEmailsApiApiKeys.apiKey,
-  process.env.BREVO_API_KEY
-);
-
-
-// =============================
-// GENERATE OTP
-// =============================
+// ===============================
+// OTP GENERATOR
+// ===============================
 
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// ===============================
+// EMAIL VALIDATION
+// Accepts:
+// Gmail: example@gmail.com
+// College: student@college.ac.in
+// ===============================
 
-// =============================
+function isValidEmail(email) {
+  const emailPattern =
+    /^[a-zA-Z0-9._%+-]+@(gmail\.com|[a-zA-Z0-9.-]+\.ac\.in)$/;
+
+  return emailPattern.test(email);
+}
+
+// ===============================
 // SEND OTP
-// =============================
+// ===============================
 
 app.post("/send-otp", async (req, res) => {
-
   try {
-
     const email = req.body.email?.trim().toLowerCase();
 
     console.log("📧 OTP request:", email);
 
-    // Allow Gmail and .ac.in
-    const emailPattern =
-      /^[a-zA-Z0-9._%+-]+@(gmail\.com|[a-zA-Z0-9.-]+\.ac\.in)$/;
-
-    if (!email || !emailPattern.test(email)) {
-
+    // Validate email
+    if (!email || !isValidEmail(email)) {
       return res.status(400).json({
         success: false,
-        message: "Enter a valid Gmail or .ac.in email address"
+        message: "Enter a valid Gmail or .ac.in email address."
       });
-
     }
 
+    // Check Brevo configuration
+    if (!process.env.BREVO_API_KEY) {
+      console.error("❌ BREVO_API_KEY is missing");
+
+      return res.status(500).json({
+        success: false,
+        message: "Email service is not configured."
+      });
+    }
+
+    if (!process.env.BREVO_SENDER_EMAIL) {
+      console.error("❌ BREVO_SENDER_EMAIL is missing");
+
+      return res.status(500).json({
+        success: false,
+        message: "Sender email is not configured."
+      });
+    }
+
+    // Generate OTP
     const otp = generateOTP();
 
-    // Store OTP
+    // Save OTP
     otpStore[email] = {
       otp: otp,
       attempts: 0,
       expires: Date.now() + 5 * 60 * 1000
     };
 
+    console.log("🔢 OTP generated for:", email);
 
-    // =============================
-    // BREVO EMAIL
-    // =============================
+    // ===============================
+    // SEND EMAIL THROUGH BREVO
+    // ===============================
 
-    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    const result = await brevo.transactionalEmails.sendTransacEmail({
+      sender: {
+        name: "OTP Verification",
+        email: process.env.BREVO_SENDER_EMAIL
+      },
 
-    sendSmtpEmail.sender = {
-      name: "OTP Verification",
-      email: process.env.BREVO_SENDER_EMAIL
-    };
+      to: [
+        {
+          email: email
+        }
+      ],
 
-    sendSmtpEmail.to = [
-      {
-        email: email
-      }
-    ];
+      subject: "Your OTP Verification Code",
 
-    sendSmtpEmail.subject =
-      "Your OTP Verification Code";
-
-    sendSmtpEmail.htmlContent = `
-      <div style="
-        font-family: Arial, sans-serif;
-        max-width: 500px;
-        margin: auto;
-        padding: 25px;
-        border-radius: 12px;
-        border: 1px solid #ddd;
-      ">
-
-        <h2>Email Verification</h2>
-
-        <p>Your OTP verification code is:</p>
-
-        <div style="
-          font-size: 32px;
-          font-weight: bold;
-          letter-spacing: 8px;
-          text-align: center;
-          padding: 20px;
-          background: #f4f4f4;
-          border-radius: 10px;
+      htmlContent: `
+        <!DOCTYPE html>
+        <html>
+        <body style="
+          margin:0;
+          padding:0;
+          background:#f4f4f4;
+          font-family:Arial,sans-serif;
         ">
-          ${otp}
-        </div>
 
-        <p style="margin-top:20px;">
-          This OTP is valid for <strong>5 minutes</strong>.
-        </p>
+          <div style="
+            max-width:500px;
+            margin:40px auto;
+            background:white;
+            padding:30px;
+            border-radius:15px;
+            box-shadow:0 5px 20px rgba(0,0,0,0.1);
+          ">
 
-        <p>
-          Maximum wrong attempts: <strong>3</strong>
-        </p>
+            <h2 style="
+              text-align:center;
+              color:#222;
+            ">
+              Email Verification
+            </h2>
 
-        <p style="color:#777;">
-          Please do not share this OTP with anyone.
-        </p>
+            <p>
+              Hello,
+            </p>
 
-      </div>
-    `;
+            <p>
+              Your OTP verification code is:
+            </p>
 
+            <div style="
+              text-align:center;
+              font-size:32px;
+              font-weight:bold;
+              letter-spacing:8px;
+              padding:20px;
+              margin:20px 0;
+              background:#f1f1f1;
+              border-radius:10px;
+              color:#111;
+            ">
+              ${otp}
+            </div>
 
-    await apiInstance.sendTransacEmail(sendSmtpEmail);
+            <p>
+              This OTP is valid for <strong>5 minutes</strong>.
+            </p>
 
-    console.log("✅ OTP sent successfully:", email);
+            <p>
+              You have a maximum of <strong>3 attempts</strong>.
+            </p>
 
-    res.json({
-      success: true,
-      message: "OTP sent successfully"
+            <p style="color:#777;font-size:13px;">
+              Please do not share this OTP with anyone.
+            </p>
+
+          </div>
+
+        </body>
+        </html>
+      `
     });
 
-  }
+    console.log("✅ OTP sent successfully:", result.messageId);
 
-  catch (error) {
+    return res.json({
+      success: true,
+      message: "OTP sent successfully."
+    });
+
+  } catch (error) {
 
     console.error("❌ BREVO ERROR:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Failed to send OTP"
+      message: "Failed to send OTP."
     });
-
   }
-
 });
 
-
-// =============================
+// ===============================
 // VERIFY OTP
-// =============================
+// ===============================
 
 app.post("/verify-otp", (req, res) => {
+  try {
 
-  const email = req.body.email?.trim().toLowerCase();
-  const enteredOTP = req.body.otp?.trim();
+    const email = req.body.email?.trim().toLowerCase();
+    const enteredOTP = req.body.otp?.trim();
 
-  const record = otpStore[email];
+    console.log("🔐 OTP verification:", email);
 
+    const record = otpStore[email];
 
-  if (!record) {
+    // OTP doesn't exist
+    if (!record) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP not found. Please request a new OTP."
+      });
+    }
 
-    return res.status(400).json({
-      success: false,
-      message: "OTP not found. Please request OTP again."
-    });
+    // OTP expired
+    if (Date.now() > record.expires) {
 
-  }
+      delete otpStore[email];
 
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired. Please request a new OTP."
+      });
+    }
 
-  // OTP expiry
-  if (Date.now() > record.expires) {
-
-    delete otpStore[email];
-
-    return res.status(400).json({
-      success: false,
-      message: "OTP expired."
-    });
-
-  }
-
-
-  // Maximum 3 attempts
-  if (record.attempts >= 3) {
-
-    delete otpStore[email];
-
-    return res.status(400).json({
-      success: false,
-      message: "Maximum 3 attempts exceeded."
-    });
-
-  }
-
-
-  // Wrong OTP
-  if (enteredOTP !== record.otp) {
-
-    record.attempts++;
-
+    // Maximum attempts
     if (record.attempts >= 3) {
 
       delete otpStore[email];
@@ -218,52 +240,65 @@ app.post("/verify-otp", (req, res) => {
         success: false,
         message: "Maximum 3 attempts exceeded."
       });
-
     }
 
-    return res.status(400).json({
-      success: false,
-      message:
-        `Invalid OTP. ${3 - record.attempts} attempt(s) remaining.`
+    // Wrong OTP
+    if (enteredOTP !== record.otp) {
+
+      record.attempts++;
+
+      const remainingAttempts = 3 - record.attempts;
+
+      if (remainingAttempts <= 0) {
+
+        delete otpStore[email];
+
+        return res.status(400).json({
+          success: false,
+          message: "Maximum 3 attempts exceeded."
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message:
+          `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`
+      });
+    }
+
+    // Correct OTP
+    delete otpStore[email];
+
+    console.log("✅ OTP verified successfully:", email);
+
+    return res.json({
+      success: true,
+      message: "OTP verified successfully."
     });
 
+  } catch (error) {
+
+    console.error("❌ VERIFY ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Verification failed."
+    });
   }
-
-
-  // Correct OTP
-  delete otpStore[email];
-
-  console.log("✅ OTP verified:", email);
-
-  res.json({
-    success: true,
-    message: "OTP verified successfully"
-  });
-
 });
 
-
-// =============================
+// ===============================
 // HOME PAGE
-// =============================
+// ===============================
 
 app.get("/", (req, res) => {
-
-  res.sendFile(
-    path.join(__dirname, "public", "index.html")
-  );
-
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-
-// =============================
+// ===============================
 // START SERVER
-// =============================
+// ===============================
 
 app.listen(PORT, "0.0.0.0", () => {
-
-  console.log(
-    `🚀 Server running on port ${PORT}`
-  );
-
+  console.log(`🚀 Server running on port ${PORT}`);
 });
